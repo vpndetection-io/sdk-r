@@ -73,14 +73,6 @@ read_as <- function(schema) {
     }
 }
 
-# A call whose answer has no schema of its own in the spec: any JSON object.
-read_object <- function(json) {
-    if (!is_object(json) && !(is.list(json) && length(json) == 0 && !is.null(attr(json, "names")))) {
-        unreadable("the answer is not a JSON object")
-    }
-    json
-}
-
 transport_error <- function(message) {
     vpnd_error("network", paste("the request failed:", gsub("\\s+", " ", trimws(message))))
 }

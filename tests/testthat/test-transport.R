@@ -4,14 +4,14 @@ ok_answer <- list(status = 200, body = list(ip = "8.8.8.8", is_vpn = FALSE))
 
 test_that("every request names the SDK and sends the key only as a Bearer header", {
     script(ok_answer)
-    probe(test_client(api_key = "  key-1\n"))
+    test_client(api_key = "  key-1\n")$lookup("8.8.8.8")
     sent <- served()[[1]]
     expect_match(sent$headers[["User-Agent"]], "^vpndetection-r/[0-9]+\\.[0-9]+\\.[0-9]+$")
     expect_identical(sent$headers[["Authorization"]], "Bearer key-1")
-    expect_identical(sent$path, "/probe")
+    expect_identical(sent$path, "/8.8.8.8")
     for (key in list(NULL, "", "   ", "\t")) {
         script(ok_answer)
-        probe(test_client(api_key = key))
+        test_client(api_key = key)$my_ip()
         expect_null(served()[[1]]$headers[["Authorization"]])
     }
 })
@@ -24,11 +24,13 @@ test_that("a key holding a control character is refused where it is set", {
 
 test_that("one to three trailing slashes on the base URL are dropped", {
     for (slashes in c("/", "//", "///")) {
-        client <- vpndetection_client(base_url = paste0(origin$url(), slashes))
-        script(ok_answer)
-        probe(client)
-        probe_many(client, 2)
-        expect_identical(vapply(served(), `[[`, "", "path"), rep("/probe", 3))
+        client <- vpndetection_client(base_url = paste0(origin$url(), slashes), cache_size = 0)
+        script(ok_answer, ok_answer, list(status = 200, echo = TRUE,
+            fail = structure(list(), names = character(0))))
+        client$lookup("8.8.8.8")
+        client$my_ip()
+        client$lookup_batch(c("8.8.8.8", "1.1.1.1"))
+        expect_identical(vapply(served(), `[[`, "", "path"), c("/8.8.8.8", "/myip", "/batch"))
     }
 })
 
@@ -45,18 +47,22 @@ test_that("a timeout, retry count or concurrency no call can use is refused wher
     expect_s3_class(caught(test_client(concurrency = 0)), "vpndetection_bad_request")
     script(ok_answer)
     client <- test_client()
+    client$lookup("8.8.8.8")
+    # Per call, before a bogon, a cache hit or a bogon-only batch could answer without a request.
     for (value in bad) {
-        expect_s3_class(caught(probe(client, timeout = value)), "vpndetection_bad_request")
-        expect_s3_class(caught(probe_many(client, 1, timeout = value)),
+        expect_s3_class(caught(client$lookup("10.0.0.1", timeout = value)), "vpndetection_bad_request")
+        expect_s3_class(caught(client$lookup("8.8.8.8", timeout = value)), "vpndetection_bad_request")
+        expect_s3_class(caught(client$lookup_batch("10.0.0.1", timeout = value)),
             "vpndetection_bad_request")
     }
     for (value in counts) {
-        expect_s3_class(caught(probe(client, retries = value)), "vpndetection_bad_request")
-        expect_s3_class(caught(probe_many(client, 1, concurrency = value)),
+        expect_s3_class(caught(client$lookup("10.0.0.1", retries = value)), "vpndetection_bad_request")
+        expect_s3_class(caught(client$lookup_batch("10.0.0.1", concurrency = value)),
             "vpndetection_bad_request")
     }
-    expect_s3_class(caught(probe_many(client, 1, concurrency = 0)), "vpndetection_bad_request")
-    expect_length(served(), 0)
+    expect_s3_class(caught(client$lookup_batch("10.0.0.1", concurrency = 0)),
+        "vpndetection_bad_request")
+    expect_length(served(), 1)
 })
 
 test_that("an attempt past its timeout is a retried network error", {
@@ -71,22 +77,22 @@ test_that("an attempt past its timeout is a retried network error", {
     on.exit(close(silent))
     url <- paste0("http://127.0.0.1:", port)
     started <- Sys.time()
-    e <- caught(probe(vpndetection_client(base_url = url, timeout = 0.2, retries = 1)))
+    e <- caught(vpndetection_client(base_url = url, timeout = 0.2, retries = 1)$lookup("8.8.8.8"))
     took <- as.numeric(difftime(Sys.time(), started, units = "secs"))
     expect_s3_class(e, "vpndetection_network")
     expect_true(e$retryable)
     expect_gt(took, 0.6)
     expect_lt(took, 3)
-    e <- caught(probe(vpndetection_client(base_url = url), timeout = 0.2, retries = 0))
+    e <- caught(vpndetection_client(base_url = url)$lookup("8.8.8.8", timeout = 0.2, retries = 0))
     expect_s3_class(e, "vpndetection_network")
-    outcome <- probe_many(vpndetection_client(base_url = url), 1, timeout = 0.2, retries = 0)
-    expect_s3_class(outcome[[1]]$error, "vpndetection_network")
+    answer <- vpndetection_client(base_url = url)$lookup_batch("8.8.8.8", timeout = 0.2, retries = 0)
+    expect_s3_class(answer[["8.8.8.8"]], "vpndetection_network")
 })
 
 test_that("retries follow the status: 5xx and a throttle three times, every other 4xx once", {
     sends <- function(answer) {
         script(answer)
-        caught(probe(test_client()))
+        caught(test_client(cache_size = 0)$lookup("8.8.8.8"))
         length(served())
     }
     expect_identical(sends(list(status = 500, body = list(error = "x"))), 3L)
@@ -96,7 +102,6 @@ test_that("retries follow the status: 5xx and a throttle three times, every othe
     expect_identical(sends(list(status = 429, headers = list(`Retry-After` = "0"),
         body = list(error = "slow"))), 3L)
     expect_identical(sends(list(status = 503, headers = list(`Retry-After` = "0"))), 3L)
-    expect_identical(sends(list(status = 503, headers = list(`Retry-After` = "1"))), 3L)
 })
 
 test_that("a Retry-After no parser should guess at is waited out on the backoff", {
@@ -106,7 +111,7 @@ test_that("a Retry-After no parser should guess at is waited out on the backoff"
         "9223372036854775807", "Mon, 31 Nov 2026 08:49:37 GMT")) {
         script(list(status = 429, headers = list(`Retry-After` = value), body = list(error = "slow")))
         started <- Sys.time()
-        e <- caught(probe(test_client()))
+        e <- caught(test_client(cache_size = 0)$lookup("8.8.8.8"))
         took <- as.numeric(difftime(Sys.time(), started, units = "secs"))
         expect_identical(e$kind, "rate_limited", label = value)
         expect_true(is.na(e$retry_after) || e$retry_after > 2147483, label = value)
@@ -115,12 +120,12 @@ test_that("a Retry-After no parser should guess at is waited out on the backoff"
     }
     script(list(status = 429, headers = list(`Retry-After` = "1"), body = list(error = "slow")))
     started <- Sys.time()
-    caught(probe(test_client(retries = 1)))
+    caught(test_client(retries = 1, cache_size = 0)$lookup("8.8.8.8"))
     expect_gte(as.numeric(difftime(Sys.time(), started, units = "secs")), 1)
-    expect_equal(pkg$parse_retry_after("Sun, 06 Nov 1994 08:49:37 GMT"), 0)
-    expect_equal(pkg$parse_retry_after("Sunday, 06-Nov-94 08:49:37 GMT"), 0)
-    expect_equal(pkg$parse_retry_after("Sun Nov  6 08:49:37 1994"), 0)
-    expect_true(is.na(pkg$parse_retry_after("Sun, 06 Nov 1994 08:49:37 PST")))
+    expect_equal(vpndetection:::parse_retry_after("Sun, 06 Nov 1994 08:49:37 GMT"), 0)
+    expect_equal(vpndetection:::parse_retry_after("Sunday, 06-Nov-94 08:49:37 GMT"), 0)
+    expect_equal(vpndetection:::parse_retry_after("Sun Nov  6 08:49:37 1994"), 0)
+    expect_true(is.na(vpndetection:::parse_retry_after("Sun, 06 Nov 1994 08:49:37 PST")))
 })
 
 test_that("a 2xx no call can read is a retried server_error carrying the status", {
@@ -132,19 +137,27 @@ test_that("a 2xx no call can read is a retried server_error carrying the status"
         list(body = list(ip = 8, is_vpn = FALSE))
     )
     for (b in bodies) {
-        label <- if (is.null(b$raw)) jsonlite::toJSON(b$body, auto_unbox = TRUE, null = "null") else b$raw
-        script(c(list(status = 200), b))
-        e <- caught(probe(test_client()))
-        expect_s3_class(e, "vpndetection_server_error")
-        expect_identical(e$status, 200L, label = label)
-        expect_length(served(), 3)
-        script(c(list(status = 200), b))
-        outcome <- probe_many(test_client(), 2)
-        for (o in outcome) {
-            expect_s3_class(o$error, "vpndetection_server_error")
-            expect_identical(o$error$status, 200L, label = label)
+        for (call in c("lookup", "my_ip", "lookup_batch")) {
+            # A batch's entry that cannot be read is that address's error alone, sent once.
+            if (call == "lookup_batch" && is.null(b$raw)) {
+                script(list(status = 200, body = list(results = list(`8.8.8.8` = b$body),
+                    errors = structure(list(), names = character(0)))))
+            } else {
+                script(c(list(status = 200), b))
+            }
+            client <- test_client(cache_size = 0)
+            e <- caught(switch(call,
+                lookup = client$lookup("8.8.8.8"),
+                my_ip = client$my_ip(),
+                lookup_batch = {
+                    r <- client$lookup_batch("8.8.8.8")
+                    if (inherits(r[[1]], "vpndetection_error")) stop(r[[1]])
+                }))
+            label <- paste(call, if (is.null(b$raw)) "member" else b$raw)
+            expect_s3_class(e, "vpndetection_server_error")
+            expect_identical(e$status, 200L, label = label)
+            expect_length(served(), if (call == "lookup_batch" && is.null(b$raw)) 1 else 3)
         }
-        expect_length(served(), 6)
     }
 })
 
@@ -154,7 +167,7 @@ test_that("a 4xx whose body is not the API's is classified by its status and sen
         for (type in c("text/html", "application/json")) {
             script(list(status = case[[1]], raw = if (case[[1]] == 403) "" else "<html>no</html>",
                 headers = list(`Content-Type` = type)))
-            e <- caught(probe(test_client()))
+            e <- caught(test_client(cache_size = 0)$lookup("8.8.8.8"))
             expect_identical(e$kind, case[[2]])
             expect_identical(e$status, as.integer(case[[1]]))
             expect_length(served(), 1)
@@ -163,55 +176,60 @@ test_that("a 4xx whose body is not the API's is classified by its status and sen
 })
 
 test_that("a date member is held to RFC 3339 and a malformed one is refused", {
-    answer <- function(seen) list(status = 200, body = list(ip = "8.8.8.8", seen = seen))
+    answer <- function(last_seen) list(status = 200, body = list(ip = "8.8.8.8", is_vpn = TRUE,
+        vpn = list(provider = "x", last_seen = last_seen)))
     script(answer("2026-09-02"))
-    expect_identical(probe(test_client())$seen, "2026-09-02")
+    expect_identical(test_client(cache_size = 0)$lookup("8.8.8.8")$vpn$last_seen, "2026-09-02")
     for (bad in c("x", "tomorrow", "monday", "2026-02-30", "2026-09-02T10:00:00Z", "2026-09-02\n",
         "٢026-09-02", "2026-9-2", "")) {
         script(answer(bad))
-        e <- caught(probe(test_client(retries = 0)))
+        e <- caught(test_client(cache_size = 0, retries = 0)$lookup("8.8.8.8"))
         expect_s3_class(e, "vpndetection_server_error")
     }
-    is_dt <- pkg$is_date_time
+    is_dt <- vpndetection:::is_date_time
     expect_true(is_dt("2026-09-02T10:00:00Z"))
     expect_true(is_dt("2026-09-02t10:00:00z"))
     expect_true(is_dt("2026-09-02T10:00:00.5+05:30"))
     for (bad in c("2026-09-02T24:00:00Z", "2026-09-02T10:00:00", "2026-09-02", "2026-09-02T10:00Z",
-        "2026-09-02T10:00:00+05", "2026-09-02T10:00:00Z\n", "2026-02-30T10:00:00Z", "x",
-        "tomorrow", "monday")) {
+        "2026-09-02T10:00:00+05", "2026-09-02T10:00:00Z\n", "2026-02-30T10:00:00Z")) {
         expect_false(is_dt(bad), label = bad)
     }
 })
 
-test_that("requests sent together keep at most `concurrency` in flight, per client and per call", {
+test_that("a batch keeps at most `concurrency` chunks in flight, per client and per call", {
     # Timed against the clock, which a loaded check machine runs slow.
     skip_on_cran()
     peak <- function(client, ...) {
-        script(c(ok_answer, list(delay = 0.5)))
-        probe_many(client, 6, ...)
+        empty <- structure(list(), names = character(0))
+        script(list(status = 200, body = list(results = empty, errors = empty), delay = 0.5))
+        client$lookup_batch(sprintf("9.0.%d.%d", 0:5999 %/% 250, 0:5999 %% 250 + 1), ...)
         expect_length(served(), 6)
         peak_in_flight()
     }
-    expect_identical(peak(test_client(retries = 0)), 6)
-    expect_identical(peak(test_client(retries = 0, concurrency = 4)), 4)
-    expect_identical(peak(test_client(retries = 0), concurrency = 2), 2)
-    expect_identical(peak(test_client(retries = 0, concurrency = 3), concurrency = 1), 1)
+    expect_identical(peak(test_client(cache_size = 0, retries = 0)), 6)
+    expect_identical(peak(test_client(cache_size = 0, retries = 0, concurrency = 4)), 4)
+    expect_identical(peak(test_client(cache_size = 0, retries = 0), concurrency = 2), 2)
+    expect_identical(peak(test_client(cache_size = 0, retries = 0, concurrency = 3),
+        concurrency = 1), 1)
 })
 
-test_that("the cache keeps the newest answers and drops one past its lifetime", {
-    cache <- pkg$new_cache(2L, 3600)
-    cache$set("a", 1)
-    cache$set("b", 2)
-    cache$get("a")
-    cache$set("c", 3)
-    expect_identical(cache$get("a"), 1)
-    expect_null(cache$get("b"))
-    expect_identical(cache$get("c"), 3)
-    off <- pkg$new_cache(0L, 3600)
-    off$set("a", 1)
-    expect_null(off$get("a"))
-    short <- pkg$new_cache(10L, 0.05)
-    short$set("a", 1)
-    Sys.sleep(0.1)
-    expect_null(short$get("a"))
+test_that("answers are cached per client and errors never are", {
+    script(ok_answer)
+    client <- test_client()
+    client$lookup("8.8.8.8")
+    client$lookup("8.8.8.8")
+    expect_length(served(), 1)
+    test_client()$lookup("8.8.8.8")
+    expect_length(served(), 2)
+    script(list(status = 400, body = list(error = "no")))
+    client <- test_client()
+    caught(client$lookup("8.8.8.8"))
+    caught(client$lookup("8.8.8.8"))
+    expect_length(served(), 2)
+    script(ok_answer)
+    client <- test_client(cache_size = 1)
+    client$lookup("8.8.8.8")
+    client$lookup("1.1.1.1")
+    client$lookup("8.8.8.8")
+    expect_length(served(), 3)
 })

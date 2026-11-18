@@ -3,11 +3,14 @@ Type: Package
 Title: Client for the 'VPNDetection' API
 Version: 1.0.0
 Authors@R: c(
-    person("Mslm Dev", email = "security@vpndetection.io", role = c("aut", "cre", "cph")))
-Description: The official client for the 'VPNDetection' API
-    <https://vpndetection.io>. Failed requests are retried as the API's
-    'Retry-After' asks, and every answer is checked against the API's published
-    specification before it is handed back.
+    person("Uman", "Shahzad", email = "uman@vpndetection.io", role = c("aut", "cre")),
+    person("Mslm Dev", role = "cph"))
+Description: Looks up whether an IP address belongs to a VPN, a residential,
+    datacenter, mobile or public proxy, a hosting provider, a Tor node, a
+    content delivery network or a relay, through the 'VPNDetection' API
+    <https://vpndetection.io>. Reserved addresses are answered locally, answers
+    are cached per client, a batch of any size is sent in chunks the API
+    accepts, and failed requests are retried as the API's 'Retry-After' asks.
 License: MIT + file LICENSE
 URL: https://vpndetection.io, https://docs.vpndetection.io,
     https://github.com/vpndetection-io/sdk-r
@@ -17,6 +20,7 @@ Depends: R (>= 4.1.0)
 Imports:
     curl (>= 5.0.0),
     jsonlite (>= 1.8.0),
+    stats,
     utils
 Suggests:
     testthat (>= 3.0.0),

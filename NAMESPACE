@@ -1,0 +1,4 @@
+export(vpndetection_client)
+S3method(print,vpndetection_client)
+S3method(print,vpndetection_error)
+S3method(conditionMessage,vpndetection_error)

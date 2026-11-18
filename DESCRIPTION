@@ -1,0 +1,24 @@
+Package: vpndetection
+Type: Package
+Title: Client for the 'VPNDetection' API
+Version: 1.0.0
+Authors@R: c(
+    person("Mslm Dev", email = "security@vpndetection.io", role = c("aut", "cre", "cph")))
+Description: The official client for the 'VPNDetection' API
+    <https://vpndetection.io>. Failed requests are retried as the API's
+    'Retry-After' asks, and every answer is checked against the API's published
+    specification before it is handed back.
+License: MIT + file LICENSE
+URL: https://vpndetection.io, https://docs.vpndetection.io,
+    https://github.com/vpndetection-io/sdk-r
+BugReports: https://github.com/vpndetection-io/sdk-r/issues
+Encoding: UTF-8
+Depends: R (>= 4.1.0)
+Imports:
+    curl (>= 5.0.0),
+    jsonlite (>= 1.8.0),
+    utils
+Suggests:
+    testthat (>= 3.0.0),
+    webfakes (>= 1.3.0)
+Config/testthat/edition: 3

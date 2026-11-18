@@ -1,0 +1,5 @@
+# R CMD build and check output.
+/vpndetection_*.tar.gz
+/vpndetection.Rcheck/
+.Rhistory
+.RData

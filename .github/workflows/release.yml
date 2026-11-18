@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  # CRAN takes a package only through its web form, reviewed by hand, so the tag follows CRAN's
+  # acceptance and this builds the same tarball from it: checked, and kept on the GitHub Release.
+  github-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      NOT_CRAN: 'true'
+    steps:
+      - uses: actions/checkout@v7
+      # The tag only TRIGGERS this; the tarball carries DESCRIPTION's Version.
+      - name: Tag must match DESCRIPTION's Version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(sed -n 's/^Version: *//p' DESCRIPTION)"
+          if [ "$tag" != "$version" ] ; then
+            echo "tag $tag does not match DESCRIPTION's Version $version" >&2
+            exit 1
+          fi
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rcmdcheck
+          needs: check
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          args: 'c("--no-manual", "--as-cran")'
+          error-on: '"warning"'
+      - run: R CMD build .
+      # This version's section of CHANGELOG.md, as the tag's GitHub Release, with the tarball. A
+      # re-run edits the release rather than failing on it.
+      - name: GitHub Release from CHANGELOG.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '/^## /{ if (found) exit; found = ($2 == v); next } found' CHANGELOG.md > notes.md
+          if ! grep -q '^### ' notes.md ; then
+            echo "CHANGELOG.md has no section for ${version}" >&2
+            exit 1
+          fi
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 ; then
+            gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
+            gh release upload "$GITHUB_REF_NAME" vpndetection_*.tar.gz --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag \
+              vpndetection_*.tar.gz
+          fi

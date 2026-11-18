@@ -110,3 +110,17 @@ test_that("a batch collapses duplicates, answers bogons locally and keys by addr
         }
     }
 })
+
+test_that("the entitlement hands back the plan's name, and a tier it was not built with, as served", {
+    cases <- Filter(function(case) case$call == "myEntitlement", corpus()$vocabulary$cases)
+    expect_gt(length(cases), 0)
+    for (case in cases) {
+        script(list(status = 200, body = case$answer))
+        answer <- test_client()$my_entitlement()
+        for (path in names(case$expect)) {
+            value <- answer
+            for (step in strsplit(path, ".", fixed = TRUE)[[1]]) value <- value[[step]]
+            expect_identical(value, case$expect[[path]], label = paste(case$name, path))
+        }
+    }
+})

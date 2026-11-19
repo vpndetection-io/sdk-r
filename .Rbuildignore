@@ -1,5 +1,6 @@
 ^LICENSE\.md$
 ^CHANGELOG\.md$
+^SECURITY\.md$
 ^\.github$
 ^\.gitignore$
 ^scripts$

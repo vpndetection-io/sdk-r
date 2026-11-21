@@ -1,7 +1,7 @@
 # [<img src="https://s3.vpndetection.io/vpndetection-public/brand/mark.svg" alt="VPNDetection" height="28"/>](https://vpndetection.io/) VPNDetection R Client Library
 
 [![CRAN](https://www.r-pkg.org/badges/version/vpndetection)](https://cran.r-project.org/package=vpndetection)
-[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/vpndetection-io/sdk-r/blob/main/LICENSE.md)
 
 The official R client for the [VPNDetection](https://vpndetection.io) API: whether an IP address is a VPN, a residential, datacenter, mobile or public proxy, a hosting provider, a Tor node, a CDN or a relay.
 
@@ -75,4 +75,4 @@ VPN Detection API: Accurate anonymity detection identifying VPNs, residential pr
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE.md).
+This project is licensed under the [MIT License](https://github.com/vpndetection-io/sdk-r/blob/main/LICENSE.md).

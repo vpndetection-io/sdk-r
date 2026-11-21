@@ -73,8 +73,13 @@ test_that("a bogon is answered locally in the widest shape", {
     expect_identical(result$ip, "10.0.0.1")
     for (flag in unlist(shape$flagsFalse)) expect_false(result[[flag]], label = flag)
     for (detail in unlist(shape$emptyObjects)) expect_length(result[[detail]], 0)
-    expect_identical(result$location, shape$location)
-    expect_equal(result$asn, shape$asn)
+    members <- setdiff(names(shape), c("why", "flagsFalse", "emptyObjects"))
+    for (member in members) {
+        expect_identical(result[[member]], shape[[member]], label = member)
+    }
+    expect_setequal(names(result), c("ip", "is_bogon", unlist(shape$flagsFalse),
+        unlist(shape$emptyObjects), members))
+    expect_null(schema_problem(result, "LookupResponse"))
 })
 
 test_that("a batch collapses duplicates, answers bogons locally and keys by address", {

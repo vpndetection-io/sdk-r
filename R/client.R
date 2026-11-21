@@ -206,22 +206,37 @@ batch_entry <- function(json, address, state) {
 }
 
 flags <- c("is_vpn", "is_hosting", "is_relay", "is_tor", "is_cdn", "is_resproxy", "is_dcproxy",
-    "is_mobproxy", "is_pubproxy")
-details <- c("vpn", "hosting", "relay", "tor", "cdn", "resproxy", "dcproxy", "mobproxy", "pubproxy")
+    "is_mobproxy", "is_pubproxy", "is_anycast", "is_carrier", "is_satellite", "is_ssh", "is_smtp",
+    "is_web", "is_dns_resolver", "is_bittorrent")
+details <- c("vpn", "hosting", "relay", "tor", "cdn", "resproxy", "dcproxy", "mobproxy", "pubproxy",
+    "carrier", "satellite", "ssh", "smtp", "dns_resolver", "bittorrent")
 
-# A reserved address is answered here, never sent: the widest shape, every flag false, every detail
-# empty, location and asn with every key empty, as the API answers a bogon.
+# A reserved address is answered here, never sent, in the widest shape the API answers a bogon in:
+# every flag false, every detail empty, and every key of location, asn, company and abuse empty or 0.
 bogon_result <- function(ip) {
     empty <- stats::setNames(list(), character(0))
-    location_keys <- c("continent", "continent_name", "country", "country_name", "timezone",
-        "currency_code", "currency_name", "currency_symbol", "flag_emoji", "flag_unicode")
+    blank <- function(...) {
+        keys <- c(...)
+        stats::setNames(as.list(rep("", length(keys))), keys)
+    }
     c(
         list(ip = ip),
         stats::setNames(as.list(rep(FALSE, length(flags))), flags),
         stats::setNames(rep(list(empty), length(details)), details),
         list(
-            location = stats::setNames(as.list(rep("", length(location_keys))), location_keys),
-            asn = list(asn = 0L, name = "", domain = "", type = "", prefix = ""),
+            web = list(),
+            location = c(
+                blank("continent", "continent_name", "country", "country_name", "timezone",
+                    "currency_code", "currency_name", "currency_symbol", "flag_emoji",
+                    "flag_unicode", "region", "region_code", "city", "postal_code"),
+                list(latitude = 0L, longitude = 0L, accuracy_radius = 0L),
+                blank("geoname_id", "dma_code", "last_changed")),
+            asn = c(list(asn = 0L), blank("name", "domain", "type", "prefix", "country",
+                "rpki_status")),
+            company = blank("name", "domain", "type", "country"),
+            hostname = "",
+            abuse = c(blank("email", "name", "phone", "address", "country", "network"),
+                list(validated = FALSE, unvalidated_since = "")),
             is_bogon = TRUE
         )
     )

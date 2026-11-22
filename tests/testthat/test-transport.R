@@ -161,6 +161,25 @@ test_that("a 2xx no call can read is a retried server_error carrying the status"
     }
 })
 
+test_that("an AS without its country or RPKI status, or with either null, is a retried server_error", {
+    asn <- list(asn = 15169L, name = "Google LLC", domain = "google.com", type = "hosting",
+        prefix = "8.8.8.0/24", country = "US", rpki_status = "valid")
+    script(list(status = 200, body = list(ip = "8.8.8.8", is_vpn = FALSE, asn = asn)))
+    expect_identical(test_client(cache_size = 0)$lookup("8.8.8.8")$asn, asn)
+    for (member in c("country", "rpki_status")) {
+        for (drop in c(TRUE, FALSE)) {
+            served_asn <- asn
+            if (drop) served_asn[[member]] <- NULL else served_asn[member] <- list(NULL)
+            script(list(status = 200, body = list(ip = "8.8.8.8", is_vpn = FALSE, asn = served_asn)))
+            e <- caught(test_client(cache_size = 0)$lookup("8.8.8.8"))
+            label <- paste(member, if (drop) "left out" else "null")
+            expect_s3_class(e, "vpndetection_server_error")
+            expect_identical(e$status, 200L, label = label)
+            expect_length(served(), 3)
+        }
+    }
+})
+
 test_that("a 4xx whose body is not the API's is classified by its status and sent once", {
     for (case in list(list(401, "unauthorized"), list(403, "forbidden"), list(429, "quota_exceeded"),
         list(400, "bad_request"))) {

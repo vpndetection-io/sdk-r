@@ -205,11 +205,11 @@ batch_entry <- function(json, address, state) {
     vpnd_error("server_error", "the API's batch answer left this address out", 200)
 }
 
-flags <- c("is_vpn", "is_hosting", "is_relay", "is_tor", "is_cdn", "is_resproxy", "is_dcproxy",
-    "is_mobproxy", "is_pubproxy", "is_anycast", "is_carrier", "is_satellite", "is_ssh", "is_smtp",
-    "is_web", "is_dns_resolver", "is_bittorrent")
-details <- c("vpn", "hosting", "relay", "tor", "cdn", "resproxy", "dcproxy", "mobproxy", "pubproxy",
-    "carrier", "satellite", "ssh", "smtp", "dns_resolver", "bittorrent")
+flags <- c("is_vpn", "is_hosting", "is_relay", "is_tor", "is_cdn", "is_bot", "is_resproxy",
+    "is_dcproxy", "is_mobproxy", "is_pubproxy", "is_anycast", "is_carrier", "is_satellite", "is_ssh",
+    "is_smtp", "is_web", "is_dns_resolver", "is_bittorrent")
+details <- c("vpn", "hosting", "relay", "tor", "cdn", "bot", "resproxy", "dcproxy", "mobproxy",
+    "pubproxy", "carrier", "satellite", "ssh", "smtp", "dns_resolver", "bittorrent")
 
 # A reserved address is answered here, never sent, in the widest shape the API answers a bogon in:
 # every flag false, every detail empty, and every key of location, asn, company and abuse empty or 0.

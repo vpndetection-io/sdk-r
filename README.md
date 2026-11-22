@@ -3,7 +3,7 @@
 [![CRAN](https://www.r-pkg.org/badges/version/vpndetection)](https://cran.r-project.org/package=vpndetection)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/vpndetection-io/sdk-r/blob/main/LICENSE.md)
 
-The official R client for the [VPNDetection](https://vpndetection.io) API: whether an IP address is a VPN, a residential, datacenter, mobile or public proxy, a hosting provider, a Tor node, a CDN or a relay.
+The official R client for the [VPNDetection](https://vpndetection.io) API: whether an IP address is a VPN, a proxy, a Tor node, a hosting provider, a CDN or a relay.
 
 ## Getting Started
 

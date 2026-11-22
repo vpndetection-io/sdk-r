@@ -5,7 +5,7 @@
 
 The official R client for the [VPNDetection](https://vpndetection.io) API: whether an IP address is a VPN, a residential, datacenter, mobile or public proxy, a hosting provider, a Tor node, a CDN or a relay.
 
-## Install
+## Getting Started
 
 ```r
 install.packages("vpndetection")

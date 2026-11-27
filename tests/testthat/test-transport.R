@@ -180,6 +180,33 @@ test_that("an AS without its country or RPKI status, or with either null, is a r
     }
 })
 
+test_that("an AS without its type is read, and one whose type is null or not a string is a retried server_error", {
+    # Unlimited's answer, which a plan without the type serves: the AS's country and RPKI status, no type.
+    asn <- list(asn = 9009L, name = "M247 Europe SRL", domain = "m247global.com",
+        prefix = "146.70.116.0/24", country = "US", rpki_status = "valid")
+    script(list(status = 200, body = list(ip = "146.70.116.130", is_vpn = TRUE, asn = asn)))
+    result <- test_client(cache_size = 0)$lookup("146.70.116.130")
+    expect_identical(result$asn, asn)
+    expect_false("type" %in% names(result$asn))
+    expect_length(served(), 1)
+
+    served_asn <- asn
+    served_asn$type <- "hosting"
+    script(list(status = 200, body = list(ip = "146.70.116.130", is_vpn = TRUE, asn = served_asn)))
+    expect_identical(test_client(cache_size = 0)$lookup("146.70.116.130")$asn$type, "hosting")
+
+    for (type in list(NULL, 5L, TRUE, list("hosting"), structure(list(), names = character(0)))) {
+        served_asn <- asn
+        served_asn["type"] <- list(type)
+        script(list(status = 200, body = list(ip = "146.70.116.130", is_vpn = TRUE, asn = served_asn)))
+        e <- caught(test_client(cache_size = 0)$lookup("146.70.116.130"))
+        label <- jsonlite::toJSON(type, auto_unbox = TRUE, null = "null")
+        expect_s3_class(e, "vpndetection_server_error")
+        expect_identical(e$status, 200L, label = label)
+        expect_length(served(), 3)
+    }
+})
+
 test_that("a 4xx whose body is not the API's is classified by its status and sent once", {
     for (case in list(list(401, "unauthorized"), list(403, "forbidden"), list(429, "quota_exceeded"),
         list(400, "bad_request"))) {
